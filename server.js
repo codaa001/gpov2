@@ -1,15 +1,19 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
-require('dotenv').config();
+
+// Učitaj .env samo ako smo na lokalnom računaru
+if (process.env.NODE_ENV !== 'production') {
+    require('dotenv').config();
+}
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Podaci se uzimaju iz bezbednog .env fajla
-const CLOUD_BIN_ID = process.env.CLOUD_BIN_ID;
-const CLOUD_API_KEY = process.env.CLOUD_API_KEY;
+// Podaci se uzimaju iz bezbednih environment varijabli sa Rendera
+const BIN_ID = process.env.CLOUD_BIN_ID;
+const API_KEY = process.env.CLOUD_API_KEY;
 const ADMIN_PASS = process.env.ADMIN_PASS;
 
 // 1. Ruta za čitanje itema (javna)
@@ -18,10 +22,17 @@ app.get('/api/items', async (req, res) => {
         const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
             headers: { 'X-Master-Key': API_KEY }
         });
+        
         const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.message || `JSONBin error status: ${response.status}`);
+        }
+        
         res.json(data);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch items' });
+        console.error("Greska pri dobavljanju itema:", err.message);
+        res.status(500).json({ error: 'Failed to fetch items', details: err.message });
     }
 });
 
@@ -41,10 +52,17 @@ app.put('/api/items', async (req, res) => {
             },
             body: JSON.stringify(req.body)
         });
+        
         const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.message || `JSONBin error status: ${response.status}`);
+        }
+        
         res.json(data);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to update items' });
+        console.error("Greska pri čuvanju itema:", err.message);
+        res.status(500).json({ error: 'Failed to update items', details: err.message });
     }
 });
 
@@ -58,5 +76,5 @@ app.post('/api/admin/login', (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
