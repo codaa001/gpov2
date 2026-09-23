@@ -8,9 +8,9 @@ app.use(cors());
 app.use(express.json());
 
 // Podaci se uzimaju iz bezbednog .env fajla
-const BIN_ID = process.env.CLOUD_BIN_ID;
-const API_KEY = process.env.CLOUD_API_KEY;
-const ADMIN_PASS = process.env.ADMIN_PASSWORD;
+const CLOUD_BIN_ID = process.env.CLOUD_BIN_ID;
+const CLOUD_API_KEY = process.env.CLOUD_API_KEY;
+const ADMIN_PASS = process.env.ADMIN_PASS;
 
 // 1. Ruta za čitanje itema (javna)
 app.get('/api/items', async (req, res) => {
