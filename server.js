@@ -1,8 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch');
+const https = require('https');
 
-// Učitaj .env samo ako smo na lokalnom računaru
 if (process.env.NODE_ENV !== 'production') {
     require('dotenv').config();
 }
@@ -11,24 +10,56 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Podaci se uzimaju iz bezbednih environment varijabli sa Rendera
 const BIN_ID = process.env.CLOUD_BIN_ID;
 const API_KEY = process.env.CLOUD_API_KEY;
 const ADMIN_PASS = process.env.ADMIN_PASS;
 
-// 1. Ruta za čitanje itema (javna)
+// Pomoćna funkcija za poziv ka JSONBin-u preko ugrađenog https modula
+function jsonBinRequest(method, path = '', data = null) {
+    return new Promise((resolve, reject) => {
+        const options = {
+            hostname: 'api.jsonbin.io',
+            path: `/v3/b/${BIN_ID}${path}`,
+            method: method,
+            headers: {
+                'X-Master-Key': API_KEY
+            }
+        };
+
+        if (data) {
+            options.headers['Content-Type'] = 'application/json';
+        }
+
+        const req = https.request(options, (res) => {
+            let body = '';
+            res.on('data', (chunk) => body += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(body);
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        resolve(parsed);
+                    } else {
+                        reject(new Error(parsed.message || `Status code ${res.statusCode}`));
+                    }
+                } catch (e) {
+                    reject(new Error('Invalid JSON response from JSONBin'));
+                }
+            });
+        });
+
+        req.on('error', (err) => reject(err));
+
+        if (data) {
+            req.write(JSON.stringify(data));
+        }
+        req.end();
+    });
+}
+
+// 1. Ruta za čitanje itema
 app.get('/api/items', async (req, res) => {
     try {
-        const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-            headers: { 'X-Master-Key': API_KEY }
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.message || `JSONBin error status: ${response.status}`);
-        }
-        
+        const data = await jsonBinRequest('GET', '/latest');
         res.json(data);
     } catch (err) {
         console.error("Greska pri dobavljanju itema:", err.message);
@@ -36,7 +67,7 @@ app.get('/api/items', async (req, res) => {
     }
 });
 
-// 2. Ruta za čuvanje itema (samo sa tačnom admin lozinkom)
+// 2. Ruta za čuvanje itema
 app.put('/api/items', async (req, res) => {
     const clientPass = req.headers['x-admin-pass'];
     if (clientPass !== ADMIN_PASS) {
@@ -44,21 +75,7 @@ app.put('/api/items', async (req, res) => {
     }
 
     try {
-        const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Master-Key': API_KEY
-            },
-            body: JSON.stringify(req.body)
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.message || `JSONBin error status: ${response.status}`);
-        }
-        
+        const data = await jsonBinRequest('PUT', '', req.body);
         res.json(data);
     } catch (err) {
         console.error("Greska pri čuvanju itema:", err.message);
